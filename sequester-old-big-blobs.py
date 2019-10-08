@@ -16,6 +16,8 @@ def parse_args():
                       help="Preserve large files newer than specified date")
   parser.add_argument('--size-cutoff', default='1M',
                       help="Definition of 'large' for extracting large files")
+  parser.add_argument('--replace-objects', action='store_true',
+                      help="Create replacement objects for old big blobs")
   parser.add_argument('refs', nargs='*', default=['--all'],
                       help="Revision specification")
   args = parser.parse_args()
@@ -95,6 +97,21 @@ def pack_objects(which_ones):
 def final_gc():
   subprocess.check_call(['git', 'gc', '--aggressive', '--prune=now'])
 
+def create_replace_refs(old_big_blobs):
+  # Create replacement object
+  rep_obj = b"These aren't the droids you're looking for.\n"
+  cmd = 'git hash-object -w --stdin'.split()
+  replacement = subprocess.check_output(cmd, input = rep_obj).rstrip()
+
+  # Make replace refs pointing to the replacement object for each blob
+  cmd = 'git update-ref --stdin'.split()
+  urp = subprocess.Popen(cmd, bufsize=-1, stdin=subprocess.PIPE)
+  for blob in old_big_blobs:
+    urp.stdin.write(b'create refs/replace/%s %s\n' % (blob, replacement))
+  urp.stdin.close()
+  if urp.wait() != 0:
+    raise SystemExit("Failed to prune unused refs")
+
 def nuke_unused_refs(refs):
   import sys
   used_refs = set(refs)
@@ -117,13 +134,16 @@ def main():
   args = parse_args()
   blobs_to_pack = get_big_blobs(args.size_cutoff)
   full_refs = get_refs(args.refs)
-  for used in get_currently_used_blobs(full_refs):
-    blobs_to_pack.discard(used)
+  if not args.replace_objects:
+    for used in get_currently_used_blobs(full_refs):
+      blobs_to_pack.discard(used)
   for used in get_recently_used_blobs(args.since, args.refs):
     blobs_to_pack.discard(used)
   print("Packing {} old, big blobs into a new pack".format(len(blobs_to_pack)))
-  pack_objects(blobs_to_pack)
   nuke_unused_refs(full_refs)
+  if args.replace_objects:
+    create_replace_refs(blobs_to_pack)
+  pack_objects(blobs_to_pack)
   final_gc()
 
 if __name__ == '__main__':
