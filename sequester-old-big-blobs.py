@@ -93,7 +93,7 @@ def pack_objects(which_ones):
   shutil.move('big-old-objects-%s.keep' % packname, pack_dir)
 
 def final_gc():
-  subprocess.check_call(['git', 'gc', '--prune=now'])
+  subprocess.check_call(['git', 'gc', '--aggressive', '--prune=now'])
 
 def nuke_unused_refs(refs):
   import sys
