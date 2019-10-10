@@ -31,7 +31,9 @@ def parse_args():
 
 def switch_to_toplevel():
   topdir_cmd = 'git rev-parse --show-toplevel'.split()
-  os.chdir(subprocess.check_output(topdir_cmd).strip())
+  topdir = subprocess.check_output(topdir_cmd).strip()
+  if topdir:  # Repo may be sparse
+    os.chdir(topdir)
 
 def get_refs(ref_arguments):
   # ref_arguments might be e.g. ['--all']; we want actual list of refs
